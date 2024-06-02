@@ -38,6 +38,21 @@ async function run() {
       res.send({ token });
     });
 
+    // middlewares
+    const verifyToken = (req, res, next) => {
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "unauthorized access" });
+        }
+        req.user = decoded;
+        next();
+      });
+    };
+
     // Route to get apartments with pagination
     app.get("/api/apartments", async (req, res) => {
       const page = parseInt(req.query.page) || 1;
@@ -57,6 +72,24 @@ async function run() {
         totalPages: Math.ceil(total / limit),
         currentPage: page,
       });
+    });
+
+    // Route to create an agreement
+    app.post("/api/agreements", verifyToken, async (req, res) => {
+      const { email: userEmail } = req.user;
+      const agreement = req.body;
+      // Check if the user has already applied for an apartment
+      const existingAgreement = await agreementsCollection.findOne({
+        userEmail,
+      });
+      if (existingAgreement) {
+        return res
+          .status(400)
+          .send("User has already applied for an apartment");
+      }
+
+      await agreementsCollection.insertOne(agreement);
+      res.json({ message: "Agreement created successfully" });
     });
 
     // Send a ping to confirm a successful connection
