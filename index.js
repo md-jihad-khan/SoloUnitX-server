@@ -105,8 +105,15 @@ async function run() {
       });
     });
 
+    // get single agreement data
+    app.get("/agreement", verifyToken, async (req, res) => {
+      const email = req.user.email;
+      const result = await agreementsCollection.findOne({ userEmail: email });
+      res.send(result);
+    });
+
     // Route to create an agreement
-    app.post("/api/agreements", verifyToken, async (req, res) => {
+    app.post("/agreements", verifyToken, async (req, res) => {
       const { email: userEmail } = req.user;
       const agreement = req.body;
       // Check if the user has already applied for an apartment
