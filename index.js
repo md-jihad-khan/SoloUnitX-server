@@ -7,7 +7,11 @@ require("dotenv").config();
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CLIENT,
+  })
+);
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster1.iq3jpr7.mongodb.net/?retryWrites=true&w=majority&appName=Cluster1`;
@@ -28,6 +32,7 @@ async function run() {
     const database = client.db("Solo-Unit-X");
     const apartmentsCollection = database.collection("apartments");
     const agreementsCollection = database.collection("agreements");
+    const userCollection = database.collection("users");
 
     // jwt
     app.post("/jwt", async (req, res) => {
@@ -52,6 +57,19 @@ async function run() {
         next();
       });
     };
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      // insert email if user doesnt exists:
+      // you can do this many ways (1. email unique, 2. upsert 3. simple checking)
+      const query = { email: user.email };
+      const existingUser = await userCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "user already exists", insertedId: null });
+      }
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
 
     // Route to get apartments with pagination
     app.get("/api/apartments", async (req, res) => {
