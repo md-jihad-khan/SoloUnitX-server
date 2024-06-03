@@ -34,6 +34,7 @@ async function run() {
     const agreementsCollection = database.collection("agreements");
     const userCollection = database.collection("users");
     const announcementCollection = database.collection("announcements");
+    const couponCollection = database.collection("coupons");
 
     // jwt
     app.post("/jwt", async (req, res) => {
@@ -76,6 +77,11 @@ async function run() {
         return res.send({ message: "user already exists", insertedId: null });
       }
       const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
+    app.get("/coupons", async (req, res) => {
+      const result = await couponCollection.find().toArray();
       res.send(result);
     });
 
