@@ -3,7 +3,9 @@ const app = express();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { default: Stripe } = require("stripe");
 require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -35,6 +37,7 @@ async function run() {
     const userCollection = database.collection("users");
     const announcementCollection = database.collection("announcements");
     const couponCollection = database.collection("coupons");
+    const paymentCollection = database.collection("payments");
 
     // jwt
     app.post("/jwt", async (req, res) => {
@@ -59,6 +62,25 @@ async function run() {
         next();
       });
     };
+
+    // create-payment-intent
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
+      const price = req.body.price;
+      const priceInCent = parseFloat(price) * 100;
+      if (!price || priceInCent < 1) return;
+      // generate clientSecret
+      const { client_secret } = await stripe.paymentIntents.create({
+        amount: priceInCent,
+        currency: "usd",
+        // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+      // send client secret as response
+      console.log(client_secret);
+      res.send({ clientSecret: client_secret });
+    });
 
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
@@ -134,6 +156,18 @@ async function run() {
 
       await agreementsCollection.insertOne(agreement);
       res.json({ message: "Agreement created successfully" });
+    });
+
+    app.post("/payment", verifyToken, async (req, res) => {
+      const paymentInfo = req.body;
+      const result = await paymentCollection.insertOne(paymentInfo);
+      res.send(result);
+    });
+
+    app.get("/payment", verifyToken, async (req, res) => {
+      const email = req.user;
+      const result = await paymentCollection.find(email).toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
