@@ -78,10 +78,10 @@ async function run() {
         },
       });
       // send client secret as response
-      console.log(client_secret);
       res.send({ clientSecret: client_secret });
     });
 
+    // api to get user data for role
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
@@ -89,6 +89,7 @@ async function run() {
       res.send(result);
     });
 
+    // upload new user in db
     app.post("/users", async (req, res) => {
       const user = req.body;
       // insert email if user doesnt exists:
@@ -102,11 +103,35 @@ async function run() {
       res.send(result);
     });
 
+    // get all members
+    app.get("/members", async (req, res) => {
+      const query = {
+        role: "member",
+      };
+      const result = await userCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // change the member role
+    app.patch("/member/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedData = {
+        $set: {
+          role: "user",
+        },
+      };
+      const result = await userCollection.updateOne(filter, updatedData);
+      res.send(result);
+    });
+
+    // get coupon code
     app.get("/coupons", async (req, res) => {
       const result = await couponCollection.find().toArray();
       res.send(result);
     });
 
+    // get all announcement
     app.get("/announcements", verifyToken, async (req, res) => {
       const result = await announcementCollection.find().toArray();
       res.send(result);
@@ -158,15 +183,24 @@ async function run() {
       res.json({ message: "Agreement created successfully" });
     });
 
+    // upload payment data
     app.post("/payment", verifyToken, async (req, res) => {
       const paymentInfo = req.body;
       const result = await paymentCollection.insertOne(paymentInfo);
       res.send(result);
     });
 
+    // get payment based on user
     app.get("/payment", verifyToken, async (req, res) => {
-      const email = req.user;
-      const result = await paymentCollection.find(email).toArray();
+      const search = req.query.search;
+
+      const query = {
+        email: req.user.email,
+        month: { $regex: search, $options: "i" },
+      };
+
+      const result = await paymentCollection.find(query).toArray();
+
       res.send(result);
     });
 
