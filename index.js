@@ -137,6 +137,14 @@ async function run() {
       res.send(result);
     });
 
+    // upload announcement
+    app.post("/announcement", async (req, res) => {
+      const announcement = req.body;
+
+      const result = await announcementCollection.insertOne(announcement);
+      res.send(result);
+    });
+
     // Route to get apartments with pagination
     app.get("/api/apartments", async (req, res) => {
       const page = parseInt(req.query.page) || 1;
@@ -162,6 +170,65 @@ async function run() {
     app.get("/agreement", verifyToken, async (req, res) => {
       const email = req.user.email;
       const result = await agreementsCollection.findOne({ userEmail: email });
+      res.send(result);
+    });
+
+    // get all agreement
+    app.get("/agreements", async (req, res) => {
+      const query = {
+        status: "pending",
+      };
+
+      const result = await agreementsCollection.find(query).toArray();
+
+      res.send(result);
+    });
+
+    // agreement request accept and reject api
+    app.post("/agreementAccept/:id", async (req, res) => {
+      const email = req.params.id;
+      const filterAgreement = {
+        userEmail: email,
+      };
+      const updatedAgreement = {
+        $set: {
+          status: "checked",
+          agreementAcceptDate: new Date(
+            new Date().getTime() - new Date().getTimezoneOffset() * 60000
+          )
+            .toISOString()
+            .slice(0, 10),
+        },
+      };
+      const data = await agreementsCollection.updateOne(
+        filterAgreement,
+        updatedAgreement
+      );
+
+      const filterUser = {
+        email: email,
+      };
+      const updatedUser = {
+        $set: {
+          role: "member",
+        },
+      };
+      const result = await userCollection.updateOne(filterUser, updatedUser);
+
+      res.send(result);
+    });
+
+    app.post("/agreementReject/:id", async (req, res) => {
+      const email = req.params.id;
+      const filter = {
+        userEmail: email,
+      };
+      const updatedData = {
+        $set: {
+          status: "checked",
+        },
+      };
+      const result = await agreementsCollection.updateOne(filter, updatedData);
       res.send(result);
     });
 
