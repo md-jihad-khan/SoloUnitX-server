@@ -130,6 +130,21 @@ async function run() {
       const result = await couponCollection.find().toArray();
       res.send(result);
     });
+    // upload a coupon
+    app.post("/coupon", async (req, res) => {
+      const couponData = req.body;
+      const result = await couponCollection.insertOne(couponData);
+      res.send(result);
+    });
+    app.delete("/coupon/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = {
+        _id: new ObjectId(id),
+      };
+      const result = await couponCollection.deleteOne(filter);
+
+      res.send(result);
+    });
 
     // get all announcement
     app.get("/announcements", verifyToken, async (req, res) => {
@@ -184,7 +199,7 @@ async function run() {
       res.send(result);
     });
 
-    // agreement request accept and reject api
+    // agreement request accept api
     app.post("/agreementAccept/:id", async (req, res) => {
       const email = req.params.id;
       const filterAgreement = {
@@ -218,6 +233,7 @@ async function run() {
       res.send(result);
     });
 
+    // agreement request reject api
     app.post("/agreementReject/:id", async (req, res) => {
       const email = req.params.id;
       const filter = {
