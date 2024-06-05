@@ -160,6 +160,25 @@ async function run() {
       res.send(result);
     });
 
+    // route to get all stats admin
+    app.get("/statistics", async (req, res) => {
+      const totalRooms = await apartmentsCollection.countDocuments();
+      const members = await userCollection.countDocuments({ role: "member" });
+      const totalUsers = await userCollection.countDocuments();
+      const availableRooms = totalRooms - members;
+      const percentageAvailable = (availableRooms / totalRooms) * 100;
+      const percentageUnavailable =
+        ((totalRooms - availableRooms) / totalRooms) * 100;
+      res.send({
+        totalRooms,
+        members,
+        totalUsers,
+        availableRooms,
+        percentageAvailable,
+        percentageUnavailable,
+      });
+    });
+
     // Route to get apartments with pagination
     app.get("/api/apartments", async (req, res) => {
       const page = parseInt(req.query.page) || 1;
