@@ -63,23 +63,51 @@ async function run() {
       });
     };
 
+    const verifyAdmin = async (req, res, next) => {
+      const user = req.user;
+      const query = { email: user?.email };
+      const result = await userCollection.findOne(query);
+
+      if (!result || result?.role !== "admin")
+        return res.status(401).send({ message: "unauthorized access!!" });
+
+      next();
+    };
+    // verify member middleware
+    const verifyMember = async (req, res, next) => {
+      const user = req.user;
+      const query = { email: user?.email };
+      const result = await userCollection.findOne(query);
+
+      if (!result || result?.role !== "member") {
+        return res.status(401).send({ message: "unauthorized access!!" });
+      }
+
+      next();
+    };
+
     // create-payment-intent
-    app.post("/create-payment-intent", verifyToken, async (req, res) => {
-      const price = req.body.price;
-      const priceInCent = parseFloat(price) * 100;
-      if (!price || priceInCent < 1) return;
-      // generate clientSecret
-      const { client_secret } = await stripe.paymentIntents.create({
-        amount: priceInCent,
-        currency: "usd",
-        // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      });
-      // send client secret as response
-      res.send({ clientSecret: client_secret });
-    });
+    app.post(
+      "/create-payment-intent",
+      verifyToken,
+      verifyMember,
+      async (req, res) => {
+        const price = req.body.price;
+        const priceInCent = parseFloat(price) * 100;
+        if (!price || priceInCent < 1) return;
+        // generate clientSecret
+        const { client_secret } = await stripe.paymentIntents.create({
+          amount: priceInCent,
+          currency: "usd",
+          // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+          automatic_payment_methods: {
+            enabled: true,
+          },
+        });
+        // send client secret as response
+        res.send({ clientSecret: client_secret });
+      }
+    );
 
     // api to get user data for role
     app.get("/user/:email", async (req, res) => {
@@ -104,7 +132,7 @@ async function run() {
     });
 
     // get all members
-    app.get("/members", async (req, res) => {
+    app.get("/members", verifyToken, verifyAdmin, async (req, res) => {
       const query = {
         role: "member",
       };
@@ -113,7 +141,7 @@ async function run() {
     });
 
     // change the member role
-    app.patch("/member/:id", async (req, res) => {
+    app.patch("/member/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const updatedData = {
@@ -131,12 +159,12 @@ async function run() {
       res.send(result);
     });
     // upload a coupon
-    app.post("/coupon", async (req, res) => {
+    app.post("/coupon", verifyToken, verifyAdmin, async (req, res) => {
       const couponData = req.body;
       const result = await couponCollection.insertOne(couponData);
       res.send(result);
     });
-    app.delete("/coupon/:id", async (req, res) => {
+    app.delete("/coupon/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const filter = {
         _id: new ObjectId(id),
@@ -153,7 +181,7 @@ async function run() {
     });
 
     // upload announcement
-    app.post("/announcement", async (req, res) => {
+    app.post("/announcement", verifyToken, async (req, res) => {
       const announcement = req.body;
 
       const result = await announcementCollection.insertOne(announcement);
@@ -161,7 +189,7 @@ async function run() {
     });
 
     // route to get all stats admin
-    app.get("/statistics", async (req, res) => {
+    app.get("/statistics", verifyToken, verifyAdmin, async (req, res) => {
       const totalRooms = await apartmentsCollection.countDocuments();
       const members = await userCollection.countDocuments({ role: "member" });
       const totalUsers = await userCollection.countDocuments();
@@ -208,7 +236,7 @@ async function run() {
     });
 
     // get all agreement
-    app.get("/agreements", async (req, res) => {
+    app.get("/agreements", verifyToken, verifyAdmin, async (req, res) => {
       const query = {
         status: "pending",
       };
@@ -219,53 +247,66 @@ async function run() {
     });
 
     // agreement request accept api
-    app.post("/agreementAccept/:id", async (req, res) => {
-      const email = req.params.id;
-      const filterAgreement = {
-        userEmail: email,
-      };
-      const updatedAgreement = {
-        $set: {
-          status: "checked",
-          agreementAcceptDate: new Date(
-            new Date().getTime() - new Date().getTimezoneOffset() * 60000
-          )
-            .toISOString()
-            .slice(0, 10),
-        },
-      };
-      const data = await agreementsCollection.updateOne(
-        filterAgreement,
-        updatedAgreement
-      );
+    app.post(
+      "/agreementAccept/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const email = req.params.id;
+        const filterAgreement = {
+          userEmail: email,
+        };
+        const updatedAgreement = {
+          $set: {
+            status: "checked",
+            agreementAcceptDate: new Date(
+              new Date().getTime() - new Date().getTimezoneOffset() * 60000
+            )
+              .toISOString()
+              .slice(0, 10),
+          },
+        };
+        const data = await agreementsCollection.updateOne(
+          filterAgreement,
+          updatedAgreement
+        );
 
-      const filterUser = {
-        email: email,
-      };
-      const updatedUser = {
-        $set: {
-          role: "member",
-        },
-      };
-      const result = await userCollection.updateOne(filterUser, updatedUser);
+        const filterUser = {
+          email: email,
+        };
+        const updatedUser = {
+          $set: {
+            role: "member",
+          },
+        };
+        const result = await userCollection.updateOne(filterUser, updatedUser);
 
-      res.send(result);
-    });
+        res.send(result);
+      }
+    );
 
     // agreement request reject api
-    app.post("/agreementReject/:id", async (req, res) => {
-      const email = req.params.id;
-      const filter = {
-        userEmail: email,
-      };
-      const updatedData = {
-        $set: {
-          status: "checked",
-        },
-      };
-      const result = await agreementsCollection.updateOne(filter, updatedData);
-      res.send(result);
-    });
+    app.post(
+      "/agreementReject/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const email = req.params.id;
+        const filter = {
+          userEmail: email,
+        };
+        const updatedData = {
+          $set: {
+            status: "checked",
+          },
+        };
+        const result = await agreementsCollection.updateOne(
+          filter,
+          updatedData
+        );
+        res.send(result);
+      }
+    );
 
     // Route to create an agreement
     app.post("/agreements", verifyToken, async (req, res) => {
@@ -286,14 +327,14 @@ async function run() {
     });
 
     // upload payment data
-    app.post("/payment", verifyToken, async (req, res) => {
+    app.post("/payment", verifyToken, verifyMember, async (req, res) => {
       const paymentInfo = req.body;
       const result = await paymentCollection.insertOne(paymentInfo);
       res.send(result);
     });
 
     // get payment based on user
-    app.get("/payment", verifyToken, async (req, res) => {
+    app.get("/payment", verifyToken, verifyMember, async (req, res) => {
       const search = req.query.search;
 
       const query = {
